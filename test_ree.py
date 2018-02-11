@@ -33,8 +33,7 @@ def test_cmds(random_state):
 
 
 def test_ree(random_state):
-    X = random_config(30, 4, random_state)
+    X = random_config(10, 4, random_state)
     D = dists(X)
-    Xree = ree(D, X0=X)
-    #assert np.linalg.matrix_rank(Xree.dot(Xree.T)) == 4
-    #assert_almost_equal(dists(Xree), D)
+    Xree = ree(D, max_num_its=10000)
+    import pdb; pdb.set_trace()
