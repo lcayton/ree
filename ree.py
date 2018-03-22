@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy
 import sklearn.manifold
+import warnings
 
 def cities_data():
     # data from http://polisci.msu.edu/jacoby/iu/mds2012/citydists/citydists.txt
@@ -22,17 +23,26 @@ def cmds(D):
     n, _ = D.shape
     H = np.eye(n) - np.ones((n, n))/n
     B = -H.dot(D**2).dot(H)/2
-    evals, evecs = np.linalg.eigh(B)
-
-    idx   = np.argsort(evals)[::-1]
-    evals = evals[idx]
-    evecs = evecs[:,idx]
-
-    w, = np.where(evals > 0)
-    L = np.diag(np.sqrt(evals[w]))
-    U = evecs[:,w]
-    X = U.dot(L)
+    X = _gram_to_config(B)
     return X
+
+def ree_error(D, Dp):
+    # Returns the sum of the abolute elementwise
+    # differences of D and Dp. Note: assumes that D
+    # and Dp and both *squared* distance matrices.
+    return np.sum(np.abs(D - Dp))
+
+def _ree_grad(B, Dsq):
+    # Computes the REE subgradient for a gram matrix B,
+    # where Dsq is the (squared) EDM passed to REE.
+
+    Dtemp = gram_dist(B)
+    G = (Dtemp < Dsq) * 2 - 1  # sets off-diag entries of subgrad correctly
+    G -= np.diag(np.diag(G))  # clear the diagonal entries
+    g = np.sum(G, axis=1) * -1  # compute the diag entries
+    G += np.diag(g)  # .. and set them
+    return G
+
 
 def ree(D, max_num_its=100000,  no_line_search=False, init_zero=True):
     n, _ = D.shape
@@ -51,66 +61,55 @@ def ree(D, max_num_its=100000,  no_line_search=False, init_zero=True):
     c = 0.1# np.float32(n)
     best_err = np.inf
     while not_done:
-        def f(b):
+        def _error(b):
             B = _vec_to_sq_matrix(b)
-            #print np.sum(np.abs(gram_dist(B) - Dsq))
-            return np.sum(np.abs(gram_dist(B) - Dsq))
+            return ree_error(gram_dist(B), Dsq)
 
-        def grad(b):
+        def _grad(b):
             Bt = _vec_to_sq_matrix(b)
-            Dtemp = gram_dist(Bt)
-            Gt = (Dtemp < Dsq) * 2 - 1  # sets off-diag entries of subgrad correctly
-            Gt -= np.diag(np.diag(Gt))  # clear the diagonal entries
-            g = np.sum(Gt, axis=1) * -1  # compute the diag entries
-            Gt += np.diag(g)  # .. and set them
+            Gt = _ree_grad(Bt, Dsq)
             return Gt.reshape(-1)
 
-        G = - grad(B.reshape(-1))
+        G = - _grad(B.reshape(-1))
 
         alpha = None
         if not no_line_search:
-            alpha, fc, gc, new_fval, old_fval, new_slope = scipy.optimize.line_search(f, grad, B.reshape(-1), G)
+            with warnings.catch_warnings():
+                warnings.filterwarnings('ignore', 'The line search algorithm did not converge')
+                (alpha, fc, gc, new_fval, old_fval, new_slope) = scipy.optimize.line_search(_error, _grad, B.reshape(-1), G)
 
         if not alpha:
             alpha = c / np.sqrt(it+1)
             # Alternative rule: gamma / norm(G)
-            #alpha = 3 / np.linalg.norm(G)
+            # alpha = 3 / np.linalg.norm(G)
 
         Bnew = B + alpha * _vec_to_sq_matrix(G)
 
         def _project(C):
             C = C - np.sum(C)/np.float(C.size)
-
-            evals, evecs = np.linalg.eigh(C)
-            idx   = np.argsort(evals)[::-1]
-            evals = evals[idx]
-            evecs = evecs[:,idx]
-            w, = np.where(evals > 0)
-            L = np.diag(evals[w])
-            U = evecs[:,w]
-            return U.dot(L).dot(U.T)
+            X = _gram_to_config(C)
+            return X.dot(X.T)
 
         Bnew = _project(Bnew)
-        #X = cmds(np.sqrt(np.maximum(gram_dist(Bnew), 0)))
-        #new = X.dot(X.T)
         B = Bnew
-        new_err = np.sum(np.abs(gram_dist(B) - Dsq))
+        new_err = ree_error(gram_dist(B), Dsq)
         best_err = np.min([best_err, new_err])
         print "it {}; error {:.2f} (best={:.2f}) [alpha={}]".format(it, new_err, best_err, alpha)
         it += 1
         not_done &= (it < max_num_its)
 
-    # XXX refactor me! common code with cmds)
+    X = _gram_to_config(B)
+    return X
+
+def _gram_to_config(B):
     evals, evecs = np.linalg.eigh(B)
     idx   = np.argsort(evals)[::-1]
     evals = evals[idx]
     evecs = evecs[:,idx]
     w, = np.where(evals > 0)
     L = np.diag(np.sqrt(evals[w]))
-    print np.sqrt(evals[w])
     U = evecs[:,w]
     X = U.dot(L)
-    #
     return X
 
 def _vec_to_sq_matrix(b):
