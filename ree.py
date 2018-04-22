@@ -1,16 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import scipy
+import scipy.optimize, scipy.spatial
 import warnings
-
-def cities_data():
-    # data from http://polisci.msu.edu/jacoby/iu/mds2012/citydists/citydists.txt
-    # and symmetrized
-
-    D = np.loadtxt('cities.txt')
-    D_clean = 0.5 * (D + D.T)
-    names = ('atl', 'chi', 'den', 'hou', 'LA', 'mia', 'NYC', 'SF', 'sea', 'WDC')
-    return D_clean, names
 
 def cmds(D):
     n, _ = D.shape
@@ -37,7 +28,7 @@ def _ree_grad(B, Dsq):
     return G
 
 
-def ree(D, max_num_its=100000, no_line_search=False, init_zero=True):
+def ree(D, max_num_its=100000, no_line_search=False, init_zero=True, verbose=True):
     n, _ = D.shape
     D = 0.5 * (D + D.T)
     Dsq = D * D
@@ -87,7 +78,8 @@ def ree(D, max_num_its=100000, no_line_search=False, init_zero=True):
         B = Bnew
         new_err = ree_error(gram_dist(B), Dsq)
         best_err = np.min([best_err, new_err])
-        print "it {}; error {:.2f} (best={:.2f}) [alpha={}]".format(it, new_err, best_err, alpha)
+        if verbose and not it%10:
+            print "it {}; error {:.2f} (best={:.2f}) [alpha={}]".format(it, new_err, best_err, alpha)
         it += 1
         not_done &= (it < max_num_its)
 
