@@ -1,7 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy
-import sklearn.manifold
 import warnings
 
 def cities_data():
@@ -12,12 +11,6 @@ def cities_data():
     D_clean = 0.5 * (D + D.T)
     names = ('atl', 'chi', 'den', 'hou', 'LA', 'mia', 'NYC', 'SF', 'sea', 'WDC')
     return D_clean, names
-
-def sklearn_mds(D):
-    mds = sklearn.manifold.MDS(dissimilarity='precomputed')
-    model = mds.fit(D)
-    print model.stress_
-    return model.embedding_
 
 def cmds(D):
     n, _ = D.shape
@@ -44,7 +37,7 @@ def _ree_grad(B, Dsq):
     return G
 
 
-def ree(D, max_num_its=100000,  no_line_search=False, init_zero=True):
+def ree(D, max_num_its=100000, no_line_search=False, init_zero=True):
     n, _ = D.shape
     D = 0.5 * (D + D.T)
     Dsq = D * D
@@ -133,8 +126,8 @@ def plot(X, names):
     plt.show()
 
 def dists(X):
-    import sklearn.metrics
-    return sklearn.metrics.pairwise.euclidean_distances(X)
+    d = scipy.spatial.distance.pdist(X)
+    return scipy.spatial.distance.squareform(d)
 
 if __name__ == '__main__':
     D, names = cities_data()
